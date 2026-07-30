@@ -1,3 +1,19 @@
+"""
+youtube_source_check.py
+유튜브 채널의 기상정보 출처 표기를 4가지 경로로 종합 확인합니다.
+
+  1) 채널 소개란(About)
+  2) 영상 설명란(Description)
+  3) 자막(수동 자막 우선, 없으면 자동생성 자막)
+  4) 위 3곳 어디에도 없을 때만 → 음성을 STT로 텍스트화 (최후 수단, 시간이 오래 걸림)
+
+사전 설치:
+    pip install yt-dlp
+    (STT까지 쓰려면 추가로) pip install faster-whisper  + ffmpeg 설치 필요
+
+실행: python youtube_source_check.py
+"""
+
 import os
 import re
 import json
@@ -175,13 +191,21 @@ def save_result(target_id, note, providers_by_source):
     all_providers = sorted({p for plist in providers_by_source.values() for p in plist})
     source_marked = "기재" if all_providers else "미기재"
     detail = "; ".join(f"{src}: {', '.join(plist)}" for src, plist in providers_by_source.items() if plist)
-    supabase.table("survey_results").insert({
+    result = supabase.table("survey_results").insert({
         "target_id": target_id,
         "source_marked": source_marked,
         "source_names": ", ".join(all_providers) if all_providers else None,
         "etc_note": f"{note} | 발견경로: {detail if detail else '없음'}",
         "action_status": "해당없음",
     }).execute()
+    result_id = result.data[0]["id"]
+
+    # 대시보드의 "제공사 분석" 탭이 이 테이블을 기준으로 그려지므로, 개별 제공사도 함께 저장합니다.
+    for provider in all_providers:
+        supabase.table("source_providers").insert({
+            "result_id": result_id,
+            "provider_name": provider,
+        }).execute()
 
 
 # ---------- 메인 ----------

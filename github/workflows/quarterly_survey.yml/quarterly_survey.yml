@@ -1,0 +1,49 @@
+name: 기상정보 유통현황 자동조사
+
+on:
+  schedule:
+    # 매 분기 첫날(1/4/7/10월 1일) 오전 9시(KST, UTC 기준 자정) 자동 실행
+    - cron: "0 0 1 1,4,7,10 *"
+  workflow_dispatch: {}   # 이 버튼으로 언제든 수동 실행도 가능 (GitHub 저장소 > Actions 탭)
+
+jobs:
+  survey:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 코드 가져오기
+        uses: actions/checkout@v4
+
+      - name: 파이썬 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: ffmpeg 설치 (유튜브 음성인식 STT용)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: 필요한 패키지 설치
+        run: pip install -r requirements.txt
+
+      - name: Web 재검증
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python crawl_web_v2.py
+
+      - name: App 재검증
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python app_verify.py
+
+      - name: YouTube 재검증
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python youtube_source_check.py
+
+      - name: 신규 대상 발굴
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python new_target_discovery.py
